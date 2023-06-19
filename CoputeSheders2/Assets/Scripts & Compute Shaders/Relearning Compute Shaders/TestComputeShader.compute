@@ -1,0 +1,42 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+#pragma kernel SquareRoots
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+
+RWStructuredBuffer<float> squareRoots;
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID) {
+    // TODO: insert actual code here!
+
+    uint width;
+    uint height;
+    
+    Result.GetDimensions(width, height);
+    
+    Result[id.xy] = float4(id.x > width / 2, id.y < height / 2, id.x < height / 2, 0.0);
+}
+
+float NewtonsMethodAproximation(float number, float guess) {
+    return guess - (guess * guess - number) / (2 * guess);
+}
+
+[numthreads(1024, 1, 1)]
+void SquareRoots(uint3 id : SV_DispatchThreadID) {
+    // TODO: insert actual code here!
+    float aproximation;
+    for (int i = 0; i < 10000000; i++) {
+        aproximation = NewtonsMethodAproximation(id.x, id.x + 1);
+        aproximation = NewtonsMethodAproximation(id.x, aproximation);
+        aproximation = NewtonsMethodAproximation(id.x, aproximation);
+        aproximation = NewtonsMethodAproximation(id.x, aproximation);
+        aproximation = NewtonsMethodAproximation(id.x, aproximation);
+        aproximation = NewtonsMethodAproximation(id.x, aproximation);
+        aproximation = NewtonsMethodAproximation(id.x, aproximation);
+    }
+    
+    squareRoots[id.x] = aproximation;
+}
