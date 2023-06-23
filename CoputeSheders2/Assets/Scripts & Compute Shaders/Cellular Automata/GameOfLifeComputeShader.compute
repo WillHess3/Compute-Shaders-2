@@ -1,0 +1,48 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+
+struct Cell{
+    int isActive;
+};
+
+RWStructuredBuffer<Cell> cellsReference;
+RWStructuredBuffer<Cell> cellsThatGetChanged;
+
+[numthreads(16,16,1)]
+void CSMain (uint3 id : SV_DispatchThreadID) {
+    // TODO: insert actual code here!
+
+    int width, height;
+    Result.GetDimensions(width, height);
+    
+    //get the number of active neighbors    
+    uint numberOfActiveNeighbors = 0; 
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            if ((int) id.x + x < 0 || (int) id.x + x >= width || (int) id.y + y < 0 || (int) id.y + y >= height || (x == 0 && y == 0)) {
+                continue;
+            }
+            
+            numberOfActiveNeighbors += cellsReference[(id.x + x) + (id.y + y) * width].isActive;
+        }
+    }
+     
+    //update cell state
+    if (cellsReference[id.x + id.y * width].isActive == 1) {
+        if (numberOfActiveNeighbors < 2 || numberOfActiveNeighbors > 3) {
+            cellsThatGetChanged[id.x + id.y * width].isActive = 0;
+        }
+    } else {
+        if (numberOfActiveNeighbors == 3) {
+            cellsThatGetChanged[id.x + id.y * width].isActive = 1;
+        }
+    }
+    
+    //draws cell
+    Result[id.xy] = float4(1, 1, 1, 1) * cellsThatGetChanged[id.x + id.y * width].isActive;
+
+}

@@ -1,0 +1,78 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel GenerateVectorGrid
+#pragma kernel SampleNoiseValues
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+struct VectorOnGrid {
+    float randomNumber;
+    float2 vector2;
+};
+
+RWStructuredBuffer<VectorOnGrid> VectorsOnGrid;
+
+StructuredBuffer<VectorOnGrid> ReadOnlyVectorsOnGrid;
+RWStructuredBuffer<float> NoiseValues;
+
+int gridWidth;
+int width;
+int height;
+
+[numthreads(64,1,1)]
+void GenerateVectorGrid (uint id : SV_DispatchThreadID) {
+    // TODO: insert actual code here!
+
+    float randomAngle = 6.283185 * VectorsOnGrid[id.x].randomNumber;
+    
+    VectorsOnGrid[id.x].vector2 = float2(cos(randomAngle), sin(randomAngle));
+}
+
+[numthreads(32, 32, 1)]
+void SampleNoiseValues(uint2 id : SV_DispatchThreadID) {
+    // TODO: insert actual code here!
+
+    //convert to grid coords
+    float2 gridCoords = float2(lerp(0, gridWidth, id.x / (float) width), lerp(0, gridWidth, id.y / (float) height));
+    
+    //get offsets from bottom left
+    int bottomLeftXCoord = floor(gridCoords.x);
+    int bottomLeftYCoord = floor(gridCoords.y);
+    
+    float xOffset = bottomLeftXCoord - gridCoords.x;
+    float yOffset = bottomLeftYCoord - gridCoords.y;
+
+    //get dot products
+    float4 dotProductValues;
+    
+    for (int j = 0; j < 2; j++) {
+        for (int i = 0; i < 2; i++) {
+            //create offset vector
+            float2 offsetVector = float2(xOffset + i, yOffset + j);
+            float2 cornerVector = ReadOnlyVectorsOnGrid[(bottomLeftXCoord + i) + (gridWidth + 1) * (bottomLeftYCoord + j)].vector2;
+
+            //dot the offset vector to the corner vector
+            float dotProduct = dot(offsetVector, cornerVector);
+            
+            float xComponent = -(i - 1) * -(j - 1) * dotProduct;
+            float yComponent = i * -(j - 1) * dotProduct;
+            float zComponent = -(i - 1) * j * dotProduct;
+            float wComponent = i * j * dotProduct;
+
+            float4 dotProductValuesNewContribution = float4(xComponent, yComponent, zComponent, wComponent);
+            dotProductValues += dotProductValuesNewContribution;
+        }
+    }
+    
+    //lerp dot products
+    float horizontalLerpParameter = 3 * (xOffset * -1) * (xOffset * -1) - 2 * (xOffset * -1) * (xOffset * -1) * (xOffset * -1);
+    float bottomLerpValue = lerp(dotProductValues.x, dotProductValues.y, horizontalLerpParameter);
+    float topLerpValue = lerp(dotProductValues.z, dotProductValues.w, horizontalLerpParameter);
+
+    float verticalLerpParameter = 3 * (yOffset * -1) * (yOffset * -1) - 2 * (yOffset * -1) * (yOffset * -1) * (yOffset * -1);
+    float noiseValue = lerp(bottomLerpValue, topLerpValue, verticalLerpParameter);
+
+    //scale noise
+    float scaledNoiseValue = (noiseValue + 0.707106) / 1.41421;
+    
+    //set pixel's value
+    NoiseValues[id.x + id.y * width] = scaledNoiseValue;
+}

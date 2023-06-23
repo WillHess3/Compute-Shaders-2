@@ -1,0 +1,56 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+
+struct Agent {
+    float2 position;
+    float2 direction;
+    float speed;
+    float4 color;
+    int size;
+};
+
+RWStructuredBuffer<Agent> agents;
+
+float deltaTime;
+
+[numthreads(1024, 1, 1)]
+void CSMain (uint3 id : SV_DispatchThreadID) {
+    //get width & height of render texture    
+    uint width;
+    uint height;    
+    Result.GetDimensions(width, height);
+    
+    //update position
+    agents[id.x].position += agents[id.x].direction * agents[id.x].speed * deltaTime;
+    
+    //move through walls
+    if (agents[id.x].position.x >= (float) width) {
+        agents[id.x].position.x = 0.0;
+    } else if (agents[id.x].position.x < 0.0) {
+        agents[id.x].position.x = (float) width;
+    }
+    
+    if (agents[id.x].position.y >= (float) height) {
+        agents[id.x].position.y = 0.0;
+    } else if (agents[id.x].position.y < 0.0) {
+        agents[id.x].position.y = (float) height;
+    }
+    
+    //draw at correct size with circle
+    for (int x = -agents[id.x].size; x <= agents[id.x].size; x++) {
+        for (int y = -agents[id.x].size; y <= agents[id.x].size; y++) {
+            uint xPosition = agents[id.x].position.x + x;
+            uint yPosition = agents[id.x].position.y + y;
+            
+            if (xPosition < 0 || xPosition >= width || yPosition < 0 || yPosition >= height || x * x + y * y > agents[id.x].size * agents[id.x].size) {
+                continue;
+            }
+            
+            Result[float2(xPosition, yPosition)] = float4(agents[id.x].color.r , agents[id.x].color.g, agents[id.x].color.b, 1);
+        }
+    }
+}
