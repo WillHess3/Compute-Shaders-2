@@ -1,0 +1,100 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+#pragma kernel Render
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+
+float4 SandColor;
+float4 EmptyColor;
+
+float RandomNumber;
+
+struct Cell {
+    int stateIndex;
+};
+
+RWStructuredBuffer<Cell> Cells;
+
+float RandomBetweenZeroAndOne(uint seed) {
+    const uint a = 16807;
+    const uint m = 2147483647;
+
+    seed = (a * seed) % m;
+
+    return seed / (float) m;
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint2 id : SV_DispatchThreadID) {
+    // TODO: insert actual code here!
+    
+    int width, height;
+    Result.GetDimensions(width, height);
+    
+    int isCellBottomLeftSand = 0;
+    int isCellBottomMiddleSand = 0;
+    int isCellBottomRightSand = 0;
+
+    if (id.y <= 0) {
+        isCellBottomLeftSand = 1;
+        isCellBottomMiddleSand = 1;
+        isCellBottomRightSand = 1;
+    } else {
+        isCellBottomMiddleSand = Cells[id.x + (id.y - 1) * width].stateIndex;
+        
+        if (id.x > 0) {
+            isCellBottomLeftSand = Cells[(id.x - 1) + (id.y - 1) * width].stateIndex;
+        } else {
+            isCellBottomLeftSand = 1;
+        }
+        
+        if (id.x < (uint) width - 1) {
+            isCellBottomRightSand = Cells[(id.x + 1) + (id.y - 1) * width].stateIndex;
+        } else {
+            isCellBottomRightSand = 1;
+        }
+    }
+    
+    if (Cells[id.x + id.y * width].stateIndex == 1) {
+        if (!isCellBottomMiddleSand) {
+            Cells[id.x + (id.y - 1) * width].stateIndex = 1;
+            Cells[id.x + id.y * width].stateIndex = 0;
+        } else {
+            if (!isCellBottomLeftSand && !isCellBottomRightSand) {
+                float randomNumber = RandomBetweenZeroAndOne(id.x * id.y * RandomNumber);
+                if (randomNumber > .5f) {
+                    Cells[(id.x + 1) + (id.y - 1) * width].stateIndex = 1;
+                    Cells[id.x + id.y * width].stateIndex = 0;
+                } else {
+                    Cells[(id.x - 1) + (id.y - 1) * width].stateIndex = 1;
+                    Cells[id.x + id.y * width].stateIndex = 0;
+                }
+            } else if (!isCellBottomLeftSand) {
+                Cells[(id.x - 1) + (id.y - 1) * width].stateIndex = 1;
+                Cells[id.x + id.y * width].stateIndex = 0;
+            } else if (!isCellBottomRightSand) {
+                Cells[(id.x + 1) + (id.y - 1) * width].stateIndex = 1;
+                Cells[id.x + id.y * width].stateIndex = 0;
+            }
+        }
+    }
+}
+
+[numthreads(8, 8, 1)]
+void Render(uint2 id : SV_DispatchThreadID) {
+    
+    int width, height;
+    Result.GetDimensions(width, height);
+    
+    float4 color;
+    if (Cells[id.x + id.y * width].stateIndex == 0) {
+        color = EmptyColor;
+    } else {
+        color = SandColor;
+    }
+    
+    Result[id.xy] = color;
+    
+}
